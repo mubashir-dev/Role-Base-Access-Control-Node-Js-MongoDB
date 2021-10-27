@@ -8,6 +8,49 @@ const userData = require("../helpers/user");
 const {roleSchema} = require('../validations/role.validate');
 const _ = require('underscore');
 
+//index role
+exports.index = [
+    async (req, res, next) => {
+        try {
+            const result = await Role.aggregate()
+                .project({
+                    "_id": 1,
+                    "name": 1,
+                    "description": 1,
+                    "createdAt": 1,
+                    "updatedAt": 1
+                });
+            res.send({
+                roles: result
+            });
+        } catch (error) {
+            next(new httpError(500, {
+                message: error.message
+            }));
+        }
+    }
+];
+//single role
+exports.find = [
+    async (req, res, next) => {
+        try {
+            const result = await Role.find({_id: req.params.id}, {
+                "_id": 1,
+                "name": 1,
+                "description": 1,
+                "createdAt": 1,
+                "updatedAt": 1
+            })
+            res.send({
+                role: result
+            });
+        } catch (error) {
+            next(new httpError(500, {
+                message: error.message
+            }));
+        }
+    }
+];
 //create role
 exports.create = async (req, res, next) => {
     try {
@@ -45,7 +88,6 @@ exports.create = async (req, res, next) => {
         }));
     }
 }
-
 //edit role
 exports.edit = async (req, res, next) => {
     try {
@@ -74,9 +116,7 @@ exports.edit = async (req, res, next) => {
                 res.status(200).send({
                     message: "Role has been Updated",
                 });
-            }
-            else
-            {
+            } else {
                 res.status(409).send({
                     message: "Role has not been Updated",
                 });
@@ -90,4 +130,29 @@ exports.edit = async (req, res, next) => {
         }));
     }
 }
-
+//delete role
+exports.delete = [
+    async (req, res, next) => {
+        try {
+            let result = await Role.findByIdAndDelete({
+                _id: req.params.id
+            });
+            if (result) {
+                res.status(200).send({
+                    role: result,
+                    message: "The Role has been deleted"
+                });
+            } else {
+                res.status(409).send({
+                    role: result,
+                    message: "The Role has not been deleted"
+                });
+            }
+        } catch
+            (error) {
+            next(new httpError(500, {
+                message: error
+            }));
+        }
+    }
+];
