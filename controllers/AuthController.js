@@ -57,43 +57,6 @@ exports.register = async (req, res, next) => {
         }));
     }
 }
-//register user
-exports.addProfileImage = [
-    auth,
-    async (req, res, next) => {
-        try {
-            if (!req.file) {
-                next(new httpError(422, {
-                    message: "Select Profile Image"
-                }));
-            } else {
-                const user = userData.user(req.headers.authorization);
-                try {
-                    UserUpload.single('image')
-                } catch (err) {
-                    console.log("Error has occurred while uploading Profile Image");
-                }
-                const userExist = await User.findOne({_id: user._id})
-                if (userExist) {
-                    const result = await userExist.update({image: '/users/' + req.file.filename});
-                    res.status(200).send({
-                        user: result,
-                        message: "User Profile Image has been Added"
-                    });
-                } else {
-                    res.status(404).send({
-                        message: "User has not found"
-                    });
-                }
-            }
-
-        } catch (error) {
-            next(new httpError(500, {
-                message: error.message
-            }));
-        }
-    }
-]
 //login
 exports.login = async (req, res, next) => {
     try {
