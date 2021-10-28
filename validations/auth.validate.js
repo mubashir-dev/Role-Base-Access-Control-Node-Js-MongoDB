@@ -7,8 +7,9 @@ const authRegisterSchema = Joi.object({
         .max(30)
         .required(),
     email: Joi.string().email().lowercase().required(),
+    role: Joi.string().required(),
     password: Joi.string().min(2).required(),
-    repeat_password:Joi.string().required().valid(Joi.ref('password')),
+    repeat_password: Joi.string().required().valid(Joi.ref('password')),
 })
 
 const authEditSchema = Joi.object({
@@ -25,7 +26,7 @@ const LoginSchema = Joi.object({
 })
 const ChangePasswordSchema = Joi.object({
     password: Joi.string().min(2).required(),
-    repeat_password:Joi.string().required().valid(Joi.ref('password'))
+    repeat_password: Joi.string().required().valid(Joi.ref('password'))
 })
 
 module.exports = {

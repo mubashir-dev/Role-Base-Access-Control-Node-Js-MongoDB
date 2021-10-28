@@ -1,9 +1,5 @@
-const {
-    body,
-    check,
-    validationResult
-} = require("express-validator");
 const User = require("../models/user.model");
+const Role = require("../models/role.model");
 const ObjectId = require('mongoose').Types.ObjectId;
 const httpError = require("http-errors");
 const passwordHash = require("../helpers/password.hash");
@@ -12,7 +8,6 @@ const auth = require("../middlewares/jwt.auth");
 const userData = require("../helpers/user");
 const {authRegisterSchema, LoginSchema, authEditSchema, ChangePasswordSchema} = require('../validations/auth.validate')
 const _ = require('underscore');
-const {UserUpload} = require('../config/storage');
 
 //register user
 exports.register = async (req, res, next) => {
@@ -28,6 +23,7 @@ exports.register = async (req, res, next) => {
             });
         } else {
             const emailExist = await User.findOne({email: req.body.email})
+            const roleExist = await Role.findOne({_id: req.body.role})
             const usernameExist = await User.findOne({username: req.body.username})
             if (emailExist)
                 next(new httpError(422, {
@@ -37,11 +33,16 @@ exports.register = async (req, res, next) => {
                 next(new httpError(422, {
                     message: `This ${req.body.username} username is already been registered`
                 }));
+            if (!roleExist)
+                next(new httpError(422, {
+                    message: `This ${req.body.role} role is not found in record`
+                }));
             let hash = await passwordHash.hash(req.body.password);
             const user = new User({
                 name: req.body.name,
                 username: req.body.username,
                 email: req.body.email,
+                role: req.body.role,
                 password: hash
             })
             const result = await user.save();
@@ -106,36 +107,65 @@ exports.login = async (req, res, next) => {
                 errors: _errors
             });
         } else {
-            const foundUser = await User.findOne({
-                email: req.body.email,
-            })
-            if (!foundUser) {
+            const foundUser = await User.aggregate([
+                {
+                    $match: {
+                        email: req.body.email,
+                    }
+                },
+                {
+                    $lookup: {
+                        from: "roles",
+                        localField: "role",
+                        foreignField: "_id",
+                        as: "role"
+                    }
+                },
+                {
+                    $unwind: "$role"
+                },
+                {
+                    $project: {
+                        "_id": 1,
+                        "name": 1,
+                        "username": 1,
+                        "role.name": 1,
+                        "email": 1,
+                        "status": 1,
+                        "password": 1,
+                        "createdAt": 1,
+                        "updatedAt": 1
+                    }
+                }
+            ]);
+
+            if (!foundUser[0]) {
                 next(new httpError(404, 'User is not found in our system'));
             }
             //Compare password
-            let hashCompare = await passwordHash.compare(req.body.password, foundUser.password);
+            const hashCompare = await passwordHash.compare(req.body.password, foundUser[0].password);
 
             if (hashCompare) {
                 //Check if user is active or suspended
-                if (foundUser.status == '1') {
+                if (foundUser[0].status == '1') {
                     let userData = {
-                        _id: foundUser._id,
-                        name: foundUser.name,
-                        email: foundUser.email,
-                        username: foundUser.username,
-                        role: foundUser.role,
-                        image: req.get('Host')+foundUser.image ?? null,
-                        status: foundUser.status == 1 ? "Active" : "Suspend",
+                        _id: foundUser[0]._id,
+                        name: foundUser[0].name,
+                        email: foundUser[0].email,
+                        username: foundUser[0].username,
+                        role: foundUser[0].role.name,
+                        status: foundUser[0].status == "1" ? "Active" : "Suspended",
                     };
                     //Prepare JWT token for authentication
                     const jwtPayload = userData;
                     const jwtData = {
-                        expiresIn: process.env.JWT_TIMEOUT_DURATION,
+                        expiresIn: process.env.JWT_EXPIRE_IN,
                     };
                     const secret = process.env.JWT_SECRET;
                     res.status(200).send({
                         message: "Successfully Logged-In",
                         token: jwt.sign(jwtPayload, secret, jwtData),
+                        token_type: 'Bearer',
                         expires: jwtData.expiresIn,
                         user: userData
                     })
@@ -258,7 +288,7 @@ exports.update = [auth,
         }
     }
 ];
-//get single user,this is only for amdin
+//changePassword
 exports.changePassword = [auth,
     async (req, res, next) => {
         try {
