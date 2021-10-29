@@ -21,11 +21,13 @@ const mongo_connection = require(path.join(__dirname, 'config', 'db'))
 const UserRoute = require(path.join(__dirname, 'routes', 'auth.route'))
 const RoleRoute = require(path.join(__dirname, 'routes', 'role.route'))
 const WorklogRoute = require(path.join(__dirname, 'routes', 'worklog.route'))
+const SettingRoute = require(path.join(__dirname, 'routes', 'settings.route'))
 
 //Routing
 app.use('/auth', UserRoute)
 app.use('/role', RoleRoute)
 app.use('/worklog', WorklogRoute)
+app.use('/setting', SettingRoute)
 
 // 404 Handling
 app.use((req, res, next) => {
