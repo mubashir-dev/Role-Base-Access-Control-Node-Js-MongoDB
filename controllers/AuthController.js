@@ -5,9 +5,11 @@ const httpError = require("http-errors");
 const passwordHash = require("../helpers/password.hash");
 const jwt = require("jsonwebtoken");
 const auth = require("../middlewares/jwt.auth");
+const admin = require("../middlewares/role");
 const userData = require("../helpers/user");
 const {authRegisterSchema, LoginSchema, authEditSchema, ChangePasswordSchema} = require('../validations/auth.validate')
 const _ = require('underscore');
+const role = require("../middlewares/role");
 
 //register user
 exports.register = async (req, res, next) => {
@@ -92,6 +94,7 @@ exports.login = async (req, res, next) => {
                         "_id": 1,
                         "name": 1,
                         "username": 1,
+                        "role._id": 1,
                         "role.name": 1,
                         "email": 1,
                         "status": 1,
@@ -116,6 +119,7 @@ exports.login = async (req, res, next) => {
                         name: foundUser[0].name,
                         email: foundUser[0].email,
                         username: foundUser[0].username,
+                        role_id: foundUser[0].role._id,
                         role: foundUser[0].role.name,
                         status: foundUser[0].status == "1" ? "Active" : "Suspended",
                     };
@@ -147,34 +151,38 @@ exports.login = async (req, res, next) => {
     }
 }
 //get all users,this is only for admin
-exports.index = [auth,
+exports.index = [auth, role.admin,
     async (req, res, next) => {
         try {
             const user = userData.user(req.headers.authorization);
-            if (user.role == 'admin') {
-                const result = await User.aggregate()
-                    .match({
-                        status: "1",
-                        _id: {$ne: user._id}
-                    })
-                    .project({
+            const result = await User.aggregate([
+                {
+                    $lookup: {
+                        from: "roles",
+                        localField: "role",
+                        foreignField: "_id",
+                        as: "role"
+                    }
+                },
+                {
+                    $unwind: "$role"
+                },
+                {
+                    $project: {
                         "_id": 1,
-                        "role": 1,
-                        "status": 1,
                         "name": 1,
                         "username": 1,
+                        "role.name": 1,
                         "email": 1,
+                        "status": 1,
                         "createdAt": 1,
                         "updatedAt": 1
-                    });
-                res.send({
-                    users: result
-                });
-            } else {
-                next(new httpError(403, {
-                    message: "Permission denied"
-                }));
-            }
+                    }
+                }
+            ]);
+            res.send({
+                users: result
+            });
         } catch (error) {
             next(new httpError(500, {
                 message: error.message
@@ -183,35 +191,40 @@ exports.index = [auth,
     }
 ];
 //get single user,this is only for admin
-exports.find = [auth,
+exports.find = [auth, role.admin,
     async (req, res, next) => {
         try {
-            const user = userData.user(req.headers.authorization);
-            if (user.role == 'admin') {
-                const result = await User.aggregate()
-                    .match({
-                        _id: req.params.id,
-                        status: "1"
-                    })
-                    .project({
+            const result = await User.aggregate([
+                {
+                    $match: {_id: ObjectId(req.params.id)}
+                },
+                {
+                    $lookup: {
+                        from: "roles",
+                        localField: "role",
+                        foreignField: "_id",
+                        as: "role"
+                    }
+                },
+                {
+                    $unwind: "$role"
+                },
+                {
+                    $project: {
                         "_id": 1,
-                        "role": 1,
-                        "status": 1,
                         "name": 1,
                         "username": 1,
+                        "role.name": 1,
                         "email": 1,
+                        "status": 1,
                         "createdAt": 1,
                         "updatedAt": 1
-                    });
-
-                res.send({
-                    user: result,
-                });
-            } else {
-                next(new httpError(401, {
-                    message: "You don't have permissions to do this"
-                }));
-            }
+                    }
+                }
+            ]);
+            res.send({
+                users: result
+            });
         } catch (error) {
             next(new httpError(500, {
                 message: error.message
@@ -247,6 +260,64 @@ exports.update = [auth,
         } catch (error) {
             next(new httpError(500, {
                 message: error.message
+            }));
+        }
+    }
+];
+//Edit User
+exports.edit = [auth, role.admin,
+    async (req, res, next) => {
+        try {
+            const validationResult = authEditSchema.validate(req.body, {abortEarly: false});
+            if (!_.isEmpty(validationResult.error)) {
+                let _errors = [];
+                validationResult.error.details.forEach((element) => {
+                    _errors.push(element.message);
+                });
+                res.status(422).send({
+                    errors: _errors
+                });
+            } else {
+                let result = await User.findByIdAndUpdate({
+                    _id: req.params.id
+                }, {
+                    name: req.body.name,
+                    username: req.body.username,
+                    email: req.body.email
+                });
+                res.status(200).send({
+                    message: "User Profile has been updated"
+                });
+            }
+        } catch (error) {
+            next(new httpError(500, {
+                message: error.message
+            }));
+        }
+    }
+];
+//delete user
+exports.delete = [auth, role.admin,
+    async (req, res, next) => {
+        try {
+            let result = await User.findByIdAndDelete({
+                _id: req.params.id
+            });
+            if (result) {
+                res.status(200).send({
+                    role: result,
+                    message: "User has been deleted"
+                });
+            } else {
+                res.status(409).send({
+                    role: result,
+                    message: "User has not been deleted"
+                });
+            }
+        } catch
+            (error) {
+            next(new httpError(500, {
+                message: error
             }));
         }
     }
@@ -293,93 +364,6 @@ exports.changePassword = [auth,
         }
     }
 ];
-//Deactivate user
-exports.deactivate = [auth,
-    async (req, res, next) => {
-        try {
-            const errors = validationResult(req);
-            if (req.params.id == undefined) {
-                next(new httpError(422, {
-                    message: "User id must be passed"
-                }));
-            } else {
-                let user = await User.findOne({
-                    _id: req.params.id
-                });
-                if (user) {
-                    const authUser = userData.user(req.headers.authorization);
-                    if (authUser.role == "admin") {
-                        let result = await User.findByIdAndUpdate({
-                            _id: req.params.id
-                        }, {
-                            status: '0'
-                        });
-                        res.status(200).send({
-                            user: result,
-                            message: "The user has been deactivated"
-                        });
-                    } else {
-                        res.status(200).send({
-                            message: "Permission denied"
-                        });
-                    }
 
-                } else {
-                    res.status(404).send({
-                        message: "User has not been found"
-                    });
-                }
-            }
-        } catch (error) {
-            next(new httpError(500, {
-                message: error
-            }));
-        }
-    }
-];
-//activate user
-exports.activate = [auth,
-    async (req, res, next) => {
-        try {
-            const errors = validationResult(req);
-            if (req.params.id == undefined) {
-                next(new httpError(422, {
-                    message: "User id must be passed"
-                }));
-            } else {
-                let user = await User.findOne({
-                    _id: req.params.id
-                });
-                if (user) {
-                    const authUser = userData.user(req.headers.authorization);
-                    if (authUser.role == "admin") {
-                        let result = await User.findByIdAndUpdate({
-                            _id: req.params.id
-                        }, {
-                            status: '0'
-                        });
-                        res.status(200).send({
-                            user: result,
-                            message: "The user has been activated"
-                        });
-                    } else {
-                        res.status(200).send({
-                            message: "Permission denied"
-                        });
-                    }
-
-                } else {
-                    res.status(404).send({
-                        message: "User has not been found"
-                    });
-                }
-            }
-        } catch (error) {
-            next(new httpError(500, {
-                message: error.message
-            }));
-        }
-    }
-];
 //logout user
 exports.logout = []

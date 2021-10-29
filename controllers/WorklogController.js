@@ -6,8 +6,6 @@ const auth = require("../middlewares/jwt.auth");
 const userData = require("../helpers/user");
 const {worklogSchema, worklogFilter} = require('../validations/worklog.validate')
 const _ = require('underscore');
-const isodate = require("isodate");
-
 
 //create worklog
 exports.create = [auth,
@@ -43,7 +41,7 @@ exports.create = [auth,
             }));
         }
     }
-]
+];
 //update worklog
 exports.edit = [auth,
     async (req, res, next) => {
@@ -85,8 +83,7 @@ exports.edit = [auth,
             }));
         }
     }
-]
-
+];
 //worklog index
 exports.index = [auth,
     async (req, res, next) => {
@@ -114,7 +111,7 @@ exports.index = [auth,
         }
     }
 ];
-//get single category
+//get single worklog
 exports.find = [
     async (req, res, next) => {
         try {
@@ -141,7 +138,6 @@ exports.find = [
         }
     }
 ];
-
 //filter worklog
 exports.filterworklog = [auth,
     async (req, res, next) => {
@@ -184,7 +180,7 @@ exports.filterworklog = [auth,
             }));
         }
     }
-]
+];
 //delete worklog
 exports.delete = [auth,
     async (req, res, next) => {
