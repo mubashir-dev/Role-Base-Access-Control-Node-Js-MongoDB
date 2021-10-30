@@ -59,6 +59,7 @@ exports.register = async (req, res, next) => {
         }));
     }
 }
+
 //login
 exports.login = async (req, res, next) => {
     try {
@@ -150,12 +151,18 @@ exports.login = async (req, res, next) => {
         }));
     }
 }
-//get all users,this is only for admin
-exports.index = [auth, role.admin,
+//getUsers only accessible by managers
+exports.getUsersManager = [auth, role.manager,
     async (req, res, next) => {
         try {
             const user = userData.user(req.headers.authorization);
+            const role = await Role.findOne({name: "User"});
             const result = await User.aggregate([
+                {
+                    $match: {
+                        'role': ObjectId(role._id)
+                    }
+                },
                 {
                     $lookup: {
                         from: "roles",
@@ -190,8 +197,98 @@ exports.index = [auth, role.admin,
         }
     }
 ];
-//get single user,this is only for admin
-exports.find = [auth, role.admin,
+//getManagers only accessible by admin
+exports.getManagers = [auth, role.admin,
+    async (req, res, next) => {
+        try {
+            const role = await Role.findOne({name: "Manager"});
+            const result = await User.aggregate([
+                {
+                    $match: {
+                        'role': ObjectId(role._id)
+                    }
+                },
+                {
+                    $lookup: {
+                        from: "roles",
+                        localField: "role",
+                        foreignField: "_id",
+                        as: "role"
+                    }
+                },
+                {
+                    $unwind: "$role"
+                },
+                {
+                    $project: {
+                        "_id": 1,
+                        "name": 1,
+                        "username": 1,
+                        "role.name": 1,
+                        "email": 1,
+                        "status": 1,
+                        "createdAt": 1,
+                        "updatedAt": 1
+                    }
+                }
+            ]);
+            res.send({
+                managers: result
+            });
+        } catch (error) {
+            next(new httpError(500, {
+                message: error.message
+            }));
+        }
+    }
+];
+//getManagers only accessible by admin
+exports.getUsersAdmin = [auth, role.admin,
+    async (req, res, next) => {
+        try {
+            const role = await Role.findOne({name: "User"});
+            const result = await User.aggregate([
+                {
+                    $match: {
+                        'role': ObjectId(role._id)
+                    }
+                },
+                {
+                    $lookup: {
+                        from: "roles",
+                        localField: "role",
+                        foreignField: "_id",
+                        as: "role"
+                    }
+                },
+                {
+                    $unwind: "$role"
+                },
+                {
+                    $project: {
+                        "_id": 1,
+                        "name": 1,
+                        "username": 1,
+                        "role.name": 1,
+                        "email": 1,
+                        "status": 1,
+                        "createdAt": 1,
+                        "updatedAt": 1
+                    }
+                }
+            ]);
+            res.send({
+                users: result
+            });
+        } catch (error) {
+            next(new httpError(500, {
+                message: error.message
+            }));
+        }
+    }
+];
+//get single user
+exports.find = [auth,
     async (req, res, next) => {
         try {
             const result = await User.aggregate([
@@ -264,8 +361,8 @@ exports.update = [auth,
         }
     }
 ];
-//Edit User
-exports.edit = [auth, role.admin,
+//edit by admin or manager
+exports.edit = [auth,
     async (req, res, next) => {
         try {
             const validationResult = authEditSchema.validate(req.body, {abortEarly: false});
@@ -297,7 +394,7 @@ exports.edit = [auth, role.admin,
     }
 ];
 //delete user
-exports.delete = [auth, role.admin,
+exports.delete = [auth,
     async (req, res, next) => {
         try {
             let result = await User.findByIdAndDelete({
@@ -364,6 +461,49 @@ exports.changePassword = [auth,
         }
     }
 ];
-
 //logout user
 exports.logout = []
+
+//getUsers with filter
+async function getUsers(role) {
+    try {
+        const role = await Role.findOne({name: role});
+        const result = await User.aggregate([
+            {
+                $match: {
+                    'role': ObjectId(role._id)
+                }
+            },
+            {
+                $lookup: {
+                    from: "roles",
+                    localField: "role",
+                    foreignField: "_id",
+                    as: "role"
+                }
+            },
+            {
+                $unwind: "$role"
+            },
+            {
+                $project: {
+                    "_id": 1,
+                    "name": 1,
+                    "username": 1,
+                    "role.name": 1,
+                    "email": 1,
+                    "status": 1,
+                    "createdAt": 1,
+                    "updatedAt": 1
+                }
+            }
+        ]);
+        res.send({
+            users: result
+        });
+    } catch (error) {
+        next(new httpError(500, {
+            message: error.message
+        }));
+    }
+}
