@@ -9,19 +9,18 @@ const _ = require('underscore');
 exports.admin = async (req, res, next) => {
     const user = userData.user(req.headers.authorization);
     try {
-        const role = await Role.find({_id: user.role_id}, {
+        const role = await Role.findOne({_id: user.role_id}, {
             "name": 1,
         });
-        console.log(role[0].name);
-        if (role[0].name == "Admin") {
+        if (role.name == "Admin") {
             next();
         } else {
-            res.status(200).send({
+            res.status(401).send({
                 message: "Permission Denied"
             });
         }
     } catch (error) {
-        res.status(409).send({
+        res.status(500).send({
             errors: error.message
         });
     }
@@ -29,19 +28,18 @@ exports.admin = async (req, res, next) => {
 exports.manager = async (req, res, next) => {
     const user = userData.user(req.headers.authorization);
     try {
-        const role = await Role.find({_id: user.role_id}, {
+        const role = await Role.findOne({_id: user.role_id}, {
             "name": 1,
         });
-        console.log(role[0].name);
-        if (role[0].name == "Admin") {
+        if (role.name == "Manager") {
             next();
         } else {
-            res.status(200).send({
+            res.status(401).send({
                 message: "Permission Denied"
             });
         }
     } catch (error) {
-        res.status(409).send({
+        res.status(500).send({
             errors: error.message
         });
     }
